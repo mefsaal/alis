@@ -648,9 +648,12 @@ function install() {
         echo "Server = $PACMAN_MIRROR" > /etc/pacman.d/mirrorlist
     fi
     if [ "$REFLECTOR" == "true" ]; then
-
+        COUNTRIES=()
+        for COUNTRY in "${REFLECTOR_COUNTRIES[@]}"; do
+            COUNTRIES+=(--country "${COUNTRY}")
+        done
         pacman -Sy --noconfirm reflector
-        reflector  --latest 25 --age 24 --protocol https --completion-percent 100 --sort rate --save /etc/pacman.d/mirrorlist
+        reflector "${COUNTRIES[@]}" --latest 25 --age 24 --protocol https --completion-percent 100 --sort rate --save /etc/pacman.d/mirrorlist
     fi
 
     sed -i 's/#Color/Color/' /etc/pacman.conf
