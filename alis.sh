@@ -1548,7 +1548,7 @@ function desktop_environment_gnome() {
 }
 
 function desktop_environment_kde() {
-    pacman_install "plasma-meta plasma-wayland-session "
+    pacman_install "plasma-meta plasma-wayland-session dolphin dolphin-plugins kate partitionmanager spectacle ark konsole"
     arch-chroot /mnt systemctl enable sddm.service
 }
 
