@@ -1548,12 +1548,12 @@ function desktop_environment_gnome() {
 }
 
 function desktop_environment_kde() {
-    pacman_install "plasma-meta plasma-wayland-session kde-applications-meta"
+    pacman_install "plasma-meta plasma-wayland-session "
     arch-chroot /mnt systemctl enable sddm.service
 }
 
 function desktop_environment_xfce() {
-    pacman_install "xfce4 xfce4-goodies lightdm lightdm-gtk-greeter xorg-server"
+    pacman_install "xfce4 lightdm lightdm-gtk-greeter xorg-server"
     arch-chroot /mnt systemctl enable lightdm.service
 }
 
