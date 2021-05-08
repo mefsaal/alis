@@ -1553,7 +1553,7 @@ function desktop_environment_kde() {
 }
 
 function desktop_environment_xfce() {
-    pacman_install "xfce4 lightdm lightdm-gtk-greeter xorg-server"
+    pacman_install "xfce4 lightdm lightdm-gtk-greeter mousepad thunar-archive-plugin thunar-media-plugin xfce4-screensaver xorg-server"
     arch-chroot /mnt systemctl enable lightdm.service
 }
 
