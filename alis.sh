@@ -64,6 +64,7 @@ DEVICE_SATA=""
 DEVICE_NVME=""
 DEVICE_MMC=""
 CPU_VENDOR=""
+RAM_SIZE=""
 VIRTUALBOX=""
 CMDLINE_LINUX_ROOT=""
 CMDLINE_LINUX=""
@@ -302,6 +303,12 @@ function facts() {
 
     if [ -n "$(lspci | grep -i virtualbox)" ]; then
         VIRTUALBOX="true"
+    fi
+
+    if [ -n "$SWAP_SIZE" ] && [[ $SWAP_SIZE == *"%"* ]]; then
+        RAM_SIZE="$(free --mega | grep "Mem:" | awk '{ print $2 }')"
+        SWAP_PERCENT="${SWAP_SIZE::-1}"
+        SWAP_SIZE=$((RAM_SIZE * SWAP_PERCENT / 100))
     fi
 }
 
