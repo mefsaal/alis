@@ -657,12 +657,12 @@ function install() {
     fi
 
     sed -i 's/#Color/Color/' /etc/pacman.conf
-    sed -i 's/#ParallelDownloads/ParallelDownloads/' /etc/pacman.conf
+    sed -i 's/#TotalDownload/TotalDownload/' /etc/pacman.conf
 
     pacstrap /mnt base base-devel linux linux-firmware
 
     sed -i 's/#Color/Color/' /mnt/etc/pacman.conf
-    sed -i 's/#ParallelDownloads/ParallelDownloads/' /mnt/etc/pacman.conf
+    sed -i 's/#TotalDownload/TotalDownload/' /mnt/etc/pacman.conf
 
     if [ "$PACKAGES_MULTILIB" == "true" ]; then
         echo "" >> /mnt/etc/pacman.conf
@@ -1197,7 +1197,7 @@ function bootloader_grub() {
     pacman_install "grub dosfstools"
     arch-chroot /mnt sed -i 's/GRUB_DEFAULT=0/GRUB_DEFAULT=saved/' /etc/default/grub
     arch-chroot /mnt sed -i 's/#GRUB_SAVEDEFAULT="true"/GRUB_SAVEDEFAULT="true"/' /etc/default/grub
-    arch-chroot /mnt sed -i -E 's/GRUB_CMDLINE_LINUX_DEFAULT=" quiet"/GRUB_CMDLINE_LINUX_DEFAULT="\1"/' /etc/default/grub
+    arch-chroot /mnt sed -i -E 's/GRUB_CMDLINE_LINUX_DEFAULT=""/GRUB_CMDLINE_LINUX_DEFAULT="\1"/' /etc/default/grub
     arch-chroot /mnt sed -i 's/GRUB_CMDLINE_LINUX=""/GRUB_CMDLINE_LINUX="'"$CMDLINE_LINUX"'"/' /etc/default/grub
     echo "" >> /mnt/etc/default/grub
     echo "# alis" >> /mnt/etc/default/grub
