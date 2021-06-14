@@ -657,7 +657,7 @@ function install() {
     fi
 
     sed -i 's/#Color/Color/' /etc/pacman.conf
-    sed -i 's/#TotalDownload/TotalDownload/' /etc/pacman.conf
+    sed -i 's/#ParallelDownloads/ParallelDownloads/' /etc/pacman.conf
 
     pacstrap /mnt base base-devel linux linux-firmware
 
