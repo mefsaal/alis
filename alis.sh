@@ -602,16 +602,16 @@ function partition() {
         btrfs subvolume create /mnt/@
         btrfs subvolume create /mnt/@home
         btrfs subvolume create /mnt/@var
-        btrfs subvolume create /mnt/@snapshots
+        btrfs subvolume create /mnt/@.snapshots
         umount /mnt
 
         mount -o "subvol=@,$PARTITION_OPTIONS,compress=zstd" "$DEVICE_ROOT" /mnt
 
-        mkdir /mnt/{boot,home,var,snapshots}
+        mkdir /mnt/{boot,home,var,.snapshots}
         mount -o "$PARTITION_OPTIONS_BOOT" "$PARTITION_BOOT" /mnt/boot
         mount -o "subvol=@home,$PARTITION_OPTIONS_ROOT,compress=zstd" "$DEVICE_ROOT" /mnt/home
         mount -o "subvol=@var,$PARTITION_OPTIONS_ROOT,compress=zstd" "$DEVICE_ROOT" /mnt/var
-        mount -o "subvol=@snapshots,$PARTITION_OPTIONS_ROOT,compress=zstd" "$DEVICE_ROOT" /mnt/snapshots
+        mount -o "subvol=@.snapshots,$PARTITION_OPTIONS_ROOT,compress=zstd" "$DEVICE_ROOT" /mnt/.snapshots
     else
         mount -o "$PARTITION_OPTIONS_ROOT" "$DEVICE_ROOT" /mnt
 
@@ -662,7 +662,7 @@ function install() {
     pacstrap /mnt base base-devel linux linux-firmware
 
     sed -i 's/#Color/Color/' /mnt/etc/pacman.conf
-    sed -i 's/#TotalDownload/TotalDownload/' /mnt/etc/pacman.conf
+    sed -i 's/#ParallelDownloads/ParallelDownloads/' /mnt/etc/pacman.conf
 
     if [ "$PACKAGES_MULTILIB" == "true" ]; then
         echo "" >> /mnt/etc/pacman.conf
