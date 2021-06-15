@@ -456,8 +456,8 @@ function partition() {
         if [ "$PARTITION_PARTED_FILE_SYSTEM_TYPE" == "f2fs" ]; then
             PARTITION_PARTED_FILE_SYSTEM_TYPE=""
         fi
-        PARTITION_PARTED_UEFI="mklabel gpt mkpart ESP fat32 1MiB 512MiB mkpart root $PARTITION_PARTED_FILE_SYSTEM_TYPE 512MiB 100% set 1 esp on"
-        PARTITION_PARTED_BIOS="mklabel msdos mkpart primary ext4 4MiB 512MiB mkpart primary $PARTITION_PARTED_FILE_SYSTEM_TYPE 512MiB 100% set 1 boot on"
+        PARTITION_PARTED_UEFI="mklabel gpt mkpart ESP fat32 1MiB 1GiB mkpart root $PARTITION_PARTED_FILE_SYSTEM_TYPE 1GiB 100% set 1 esp on"
+        PARTITION_PARTED_BIOS="mklabel msdos mkpart primary ext4 4MiB 1GiB mkpart primary $PARTITION_PARTED_FILE_SYSTEM_TYPE 1GiB 100% set 1 boot on"
 
         if [ "$BIOS_TYPE" == "uefi" ]; then
             if [ "$DEVICE_SATA" == "true" ]; then
