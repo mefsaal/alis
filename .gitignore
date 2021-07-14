@@ -4,3 +4,5 @@ site/resources/_gen/
 output-archlinux-alis-virtualbox/
 *.vala
 *.patch
+packer/download-packer.sh
+packer/alis-packer-efi-ext4-luks-systemd.sh
