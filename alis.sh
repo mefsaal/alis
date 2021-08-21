@@ -638,16 +638,18 @@ function partition() {
         mount -o "$PARTITION_OPTIONS" "$DEVICE_ROOT" /mnt
         btrfs subvolume create /mnt/@
         btrfs subvolume create /mnt/@home
-        btrfs subvolume create /mnt/@var_log
+        btrfs subvolume create /mnt/@cache
+        btrfs subvolume create /mnt/@log
         btrfs subvolume create /mnt/@snapshots
         umount /mnt
 
         mount -o "subvol=@,$PARTITION_OPTIONS,compress=zstd" "$DEVICE_ROOT" /mnt
 
-        mkdir /mnt/{boot,home,var,var/log,.snapshots}
+        mkdir /mnt/{boot,home,var,var/cache,var/log,.snapshots}
         mount -o "$PARTITION_OPTIONS_BOOT" "$PARTITION_BOOT" /mnt/boot
         mount -o "subvol=@home,$PARTITION_OPTIONS_ROOT,compress=zstd" "$DEVICE_ROOT" /mnt/home
-        mount -o "subvol=@var_log,$PARTITION_OPTIONS_ROOT,compress=zstd" "$DEVICE_ROOT" /mnt/var/log
+        mount -o "subvol=@cache,$PARTITION_OPTIONS_ROOT,compress=zstd" "$DEVICE_ROOT" /mnt/var/cache
+        mount -o "subvol=@log,$PARTITION_OPTIONS_ROOT,compress=zstd" "$DEVICE_ROOT" /mnt/var/log
         mount -o "subvol=@snapshots,$PARTITION_OPTIONS_ROOT,compress=zstd" "$DEVICE_ROOT" /mnt/.snapshots
     else
         mount -o "$PARTITION_OPTIONS_ROOT" "$DEVICE_ROOT" /mnt
