@@ -665,14 +665,14 @@ function partition() {
     # swap
     if [ -n "$SWAP_SIZE" ]; then
         if [ "$FILE_SYSTEM_TYPE" == "btrfs" ]; then
-            truncate -s 0 /mnt$SWAPFILE
-            chattr +C /mnt$SWAPFILE
-            btrfs property set /mnt$SWAPFILE compression none
+            truncate -s 0 /mnt/swap/$SWAPFILE
+            chattr +C /mnt/swap/$SWAPFILE
+            btrfs property set /mnt/swap/$SWAPFILE compression none
         fi
 
-        dd if=/dev/zero of=/mnt$SWAPFILE bs=1M count=$SWAP_SIZE status=progress
-        chmod 600 /mnt$SWAPFILE
-        mkswap /mnt$SWAPFILE
+        dd if=/dev/zero of=/mnt/swap/$SWAPFILE bs=1M count=$SWAP_SIZE status=progress
+        chmod 600 /mnt/swap$SWAPFILE
+        mkswap /mnt/swap/$SWAPFILE
     fi
 
     # set variables
