@@ -641,7 +641,6 @@ function partition() {
         btrfs subvolume create /mnt/@log
         btrfs subvolume create /mnt/@snapshots
         btrfs subvolume create /mnt/@tmp
-        btrfs subvolume create /mnt/@swap
         umount /mnt
 
         mount -o "subvol=@,$PARTITION_OPTIONS,compress=zstd,space_cache=v2,autodefrag" "$DEVICE_ROOT" /mnt
@@ -653,7 +652,6 @@ function partition() {
         mount -o "subvol=@log,$PARTITION_OPTIONS_ROOT,compress=zstd" "$DEVICE_ROOT" /mnt/var/log
         mount -o "subvol=@snapshots,$PARTITION_OPTIONS_ROOT,compress=zstd" "$DEVICE_ROOT" /mnt/.snapshots
         mount -o "subvol=@tmp,$PARTITION_OPTIONS_ROOT,compress=zstd" "$DEVICE_ROOT" /mnt/tmp
-        mount -o "subvol=@swap,$PARTITION_OPTIONS_ROOT" "$DEVICE_ROOT" /mnt/swap
     else
         mount -o "$PARTITION_OPTIONS_ROOT" "$DEVICE_ROOT" /mnt
 
@@ -664,6 +662,9 @@ function partition() {
     # swap
     if [ -n "$SWAP_SIZE" ]; then
         if [ "$FILE_SYSTEM_TYPE" == "btrfs" ]; then
+            btrfs subvolume create /mnt/@swap
+            mkdir /mnt/swap
+            mount -o "subvol=@swap" "$DEVICE_ROOT" /mnt/swap
             truncate -s 0 /mnt/swap/$SWAPFILE
             chattr +C /mnt/swap/$SWAPFILE
             btrfs property set /mnt/swap/$SWAPFILE compression none
