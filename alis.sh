@@ -646,19 +646,21 @@ function partition() {
         btrfs subvolume create /mnt/@home
         btrfs subvolume create /mnt/@cache
         btrfs subvolume create /mnt/@log
-        btrfs subvolume create /mnt/@snapshots
+        btrfs subvolume create /mnt/@.snapshots
         btrfs subvolume create /mnt/@tmp
+	btrfs subvolume create /mnt/@swap
         umount /mnt
 
         mount -o "subvol=@,$PARTITION_OPTIONS,compress=zstd,space_cache=v2,autodefrag" "$DEVICE_ROOT" /mnt
 
-        mkdir /mnt/{boot,home,var,var/cache,var/log,.snapshots,tmp}
+        mkdir /mnt/{boot,home,var,var/cache,var/log,.snapshots,tmp,swap}
         mount -o "$PARTITION_OPTIONS_BOOT" "$PARTITION_BOOT" /mnt/boot
         mount -o "subvol=@home,$PARTITION_OPTIONS_ROOT,compress=zstd" "$DEVICE_ROOT" /mnt/home
         mount -o "subvol=@cache,$PARTITION_OPTIONS_ROOT,compress=zstd" "$DEVICE_ROOT" /mnt/var/cache
         mount -o "subvol=@log,$PARTITION_OPTIONS_ROOT,compress=zstd" "$DEVICE_ROOT" /mnt/var/log
         mount -o "subvol=@.snapshots,$PARTITION_OPTIONS_ROOT,compress=zstd" "$DEVICE_ROOT" /mnt/.snapshots
         mount -o "subvol=@tmp,$PARTITION_OPTIONS_ROOT,compress=zstd" "$DEVICE_ROOT" /mnt/tmp
+	mount -o "subvol=@swap,$PARTITION_OPTIONS_ROOT" "$DEVICE_ROOT" /mnt/swap
     else
         mount -o "$PARTITION_OPTIONS_ROOT" "$DEVICE_ROOT" /mnt
 
@@ -707,12 +709,12 @@ function install() {
     fi
 
     sed -i 's/#Color/Color/' /etc/pacman.conf
-    sed -i 's/#ParallelDownloads/ParallelDownloads/' /etc/pacman.conf
+    sed -i 's/#ParallelDownloads = 5/ParallelDownloads = 25/' /etc/pacman.conf
 
     pacstrap /mnt base base-devel linux linux-firmware
 
     sed -i 's/#Color/Color/' /mnt/etc/pacman.conf
-    sed -i 's/#ParallelDownloads/ParallelDownloads/' /mnt/etc/pacman.conf
+    sed -i 's/#ParallelDownloads  = 5/ParallelDownloads = 25/' /mnt/etc/pacman.conf
 
     if [ "$PACKAGES_MULTILIB" == "true" ]; then
         echo "" >> /mnt/etc/pacman.conf
