@@ -2,6 +2,7 @@
 
 ![Arch Linux](https://raw.githubusercontent.com/picodotdev/alis/master/images/archlinux-badge.svg)
 ![Bash](https://raw.githubusercontent.com/picodotdev/alis/master/images/sh-bash-badge.svg)
+![Shellcheck](https://github.com/picodotdev/alis/actions/workflows/shellcheck.yml/badge.svg)
 
 Arch Linux Install Script (or alis, also known as _the Arch Linux executable installation guide and wiki_) installs an unattended, automated and customized Arch Linux system.
 
@@ -63,7 +64,7 @@ For new features, improvements and bugs, fill an issue in GitHub or make a pull 
 * **Desktop environment**: GNOME, KDE, XFCE, Mate, Cinnamon, LXDE, i3-wm, i3-gaps, Deepin, Budgie, Bspwm, Awesome, Qtile, Openbox, Leftwm, Dusk
 * **Display managers**: GDM, SDDM, Lightdm, lxdm
 * **Graphics controller**: intel, nvidia and amd with optionally early KMS start. With intel optionally fastboot, hardware video acceleration and framebuffer compression.
-* **Bootloader**: GRUB, rEFInd, systemd-boot
+* **Bootloader**: GRUB, rEFInd, systemd-boot, efistub
 * **Custom shell**: bash, zsh, dash, fish
 * **WPA WIFI network** installation
 * **Periodic TRIM** for SSD storage

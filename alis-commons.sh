@@ -136,6 +136,8 @@ function facts_commons() {
         CPU_VENDOR="intel"
     elif lscpu | grep -q "AuthenticAMD"; then
         CPU_VENDOR="amd"
+    else
+        CPU_VENDOR=""
     fi
 
     if lspci -nn | grep "\[03" | grep -qi "intel"; then
@@ -146,14 +148,29 @@ function facts_commons() {
         GPU_VENDOR="nvidia"
     elif lspci -nn | grep "\[03" | grep -qi "vmware"; then
         GPU_VENDOR="vmware"
+    else
+        GPU_VENDOR=""
     fi
 
     if systemd-detect-virt | grep -qi "oracle"; then
         VIRTUALBOX="true"
+    else
+        VIRTUALBOX="false"
     fi
 
     if systemd-detect-virt | grep -qi "vmware"; then
         VMWARE="true"
+    else
+        VMWARE="false"
+    fi
+
+    INITRD_MICROCODE=""
+    if [ "$VIRTUALBOX" != "true" ] && [ "$VMWARE" != "true" ]; then
+        if [ "$CPU_VENDOR" == "intel" ]; then
+            INITRD_MICROCODE="intel-ucode.img"
+        elif [ "$CPU_VENDOR" == "amd" ]; then
+            INITRD_MICROCODE="amd-ucode.img"
+        fi
     fi
 
     USER_NAME_INSTALL="$(whoami)"
@@ -267,10 +284,10 @@ function systemd_units() {
         local UNIT=${U}
         if [[ $UNIT == -* ]]; then
             local ACTION="disable"
-            local UNIT=${UNIT//^-/}
+            local UNIT=$(echo "$UNIT" | sed "s/^-//g")
         elif [[ $UNIT == +* ]]; then
             local ACTION="enable"
-            local UNIT=${UNIT//^+/}
+            local UNIT=$(echo "$UNIT" | sed "s/^+//g")
         elif [[ $UNIT =~ ^[a-zA-Z0-9]+ ]]; then
             local ACTION="enable"
             local UNIT=$UNIT
