@@ -160,6 +160,11 @@ function check_variables() {
     check_variables_list "PARTITION_MODE" "$PARTITION_MODE" "auto custom manual" "true" "true"
     check_variables_value "PARTITION_BOOT_NUMBER" "$PARTITION_BOOT_NUMBER"
     check_variables_value "PARTITION_ROOT_NUMBER" "$PARTITION_ROOT_NUMBER"
+    check_variables_boolean "GPT_AUTOMOUNT" "$GPT_AUTOMOUNT"
+    if [ "$GPT_AUTOMOUNT" == "true" ] && [ "$LVM" == "true" ]; then
+        echo "LVM not possible in combination with GPT partition automounting."
+        exit 1
+    fi
     check_variables_equals "WIFI_KEY" "WIFI_KEY_RETYPE" "$WIFI_KEY" "$WIFI_KEY_RETYPE"
     check_variables_value "PING_HOSTNAME" "$PING_HOSTNAME"
     check_variables_boolean "REFLECTOR" "$REFLECTOR"
@@ -197,6 +202,7 @@ function check_variables() {
         fi
     fi
     check_variables_value "HOOKS" "$HOOKS"
+    check_variables_boolean "UKI" "$UKI"
     check_variables_list "BOOTLOADER" "$BOOTLOADER" "auto grub refind systemd efistub" "true" "true"
     check_variables_list "CUSTOM_SHELL" "$CUSTOM_SHELL" "bash zsh dash fish" "true" "true"
     check_variables_list "DESKTOP_ENVIRONMENT" "$DESKTOP_ENVIRONMENT" "gnome kde xfce mate cinnamon lxde i3-wm i3-gaps deepin budgie bspwm awesome qtile openbox leftwm dusk" "false" "true"
@@ -418,7 +424,7 @@ function partition() {
         if [ "$BIOS_TYPE" == "uefi" ]; then
             parted -s "$DEVICE" "$PARTITION_PARTED_UEFI"
             if [ -n "$LUKS_PASSWORD" ]; then
-                sgdisk -t="$PARTITION_ROOT_NUMBER":8309 "$DEVICE"
+                sgdisk -t="$PARTITION_ROOT_NUMBER":8304 "$DEVICE"
             elif [ "$LVM" == "true" ]; then
                 sgdisk -t="$PARTITION_ROOT_NUMBER":8e00 "$DEVICE"
             fi
@@ -538,11 +544,13 @@ function partition() {
         if [ "$FILE_SYSTEM_TYPE" == "btrfs" ]; then
             SWAPFILE="${BTRFS_SUBVOLUME_SWAP[2]}$SWAPFILE"
             chattr +C "${MNT_DIR}"
+            btrfs filesystem mkswapfile --size "${SWAP_SIZE}m" --uuid clear "${MNT_DIR}${SWAPFILE}"
+            swapon "${MNT_DIR}${SWAPFILE}"
+        else
+            dd if=/dev/zero of="${MNT_DIR}$SWAPFILE" bs=1M count="$SWAP_SIZE" status=progress
+            chmod 600 "${MNT_DIR}${SWAPFILE}"
+            mkswap "${MNT_DIR}${SWAPFILE}"
         fi
-
-        dd if=/dev/zero of="${MNT_DIR}$SWAPFILE" bs=1M count="$SWAP_SIZE" status=progress
-        chmod 600 "${MNT_DIR}${SWAPFILE}"
-        mkswap "${MNT_DIR}${SWAPFILE}"
     fi
 
     # set variables
@@ -557,6 +565,10 @@ function partition() {
 function install() {
     print_step "install()"
     local COUNTRIES=()
+
+    while [ "$(systemctl is-active multi-user.target)" == "inactive" ]; do
+        sleep 1
+    done
 
     pacman-key --init
     pacman-key --populate
@@ -627,21 +639,31 @@ EOT
 function configuration() {
     print_step "configuration()"
 
-    genfstab -U "${MNT_DIR}" >> "${MNT_DIR}"/etc/fstab
+    if [ "$GPT_AUTOMOUNT" != "true" ]; then
+        genfstab -U "${MNT_DIR}" >> "${MNT_DIR}/etc/fstab"
 
-    if [ -n "$SWAP_SIZE" ]; then
-        {
-            echo "# swap"
-            echo "$SWAPFILE none swap defaults 0 0"
-            echo ""
-        }>> "${MNT_DIR}"/etc/fstab
+        cat <<EOT >> "${MNT_DIR}/etc/fstab"
+# efivars
+efivarfs /sys/firmware/efi/efivars efivarfs ro,nosuid,nodev,noexec 0 0
+
+EOT
+
+        if [ -n "$SWAP_SIZE" ]; then
+            cat <<EOT >> "${MNT_DIR}/etc/fstab"
+# swap
+$SWAPFILE none swap defaults 0 0
+
+EOT
+        fi
     fi
 
     if [ "$DEVICE_TRIM" == "true" ]; then
-        if [ "$FILE_SYSTEM_TYPE" == "f2fs" ]; then
-            sed -i 's/relatime/noatime,nodiscard/' "${MNT_DIR}"/etc/fstab
-        else
-            sed -i 's/relatime/noatime/' "${MNT_DIR}"/etc/fstab
+        if [ "$GPT_AUTOMOUNT" != "true" ]; then
+            if [ "$FILE_SYSTEM_TYPE" == "f2fs" ]; then
+                sed -i 's/relatime/noatime,nodiscard/' "${MNT_DIR}"/etc/fstab
+            else
+                sed -i 's/relatime/noatime/' "${MNT_DIR}"/etc/fstab
+            fi
         fi
         arch-chroot "${MNT_DIR}" systemctl enable fstrim.timer
     fi
@@ -740,6 +762,10 @@ function mkinitcpio_configuration() {
         if [ -n "$LUKS_PASSWORD" ]; then
             HOOKS=${HOOKS//!sd-encrypt/sd-encrypt}
         fi
+    elif [ "$GPT_AUTOMOUNT" == "true" ] && [ -n "$LUKS_PASSWORD" ]; then
+        HOOKS=${HOOKS//!systemd/systemd}
+        HOOKS=${HOOKS//!sd-vconsole/sd-vconsole}
+        HOOKS=${HOOKS//!sd-encrypt/sd-encrypt}
     else
         HOOKS=${HOOKS//!udev/udev}
         HOOKS=${HOOKS//!usr/usr}
@@ -773,6 +799,21 @@ function mkinitcpio_configuration() {
     fi
     if [ "$KERNELS_COMPRESSION" == "zstd" ]; then
         pacman_install "zstd"
+    fi
+
+    if [ "$UKI" == "true" ]; then
+        mkdir -p "${MNT_DIR}$ESP_DIRECTORY/EFI/linux"
+
+        mkinitcpio_preset "linux"
+        if [ -n "$KERNELS" ]; then
+            IFS=' ' read -r -a KS <<< "$KERNELS"
+            for KERNEL in "${KS[@]}"; do
+                if [[ "$KERNEL" =~ ^.*-headers$ ]]; then
+                    continue
+                fi
+                mkinitcpio_preset "$KERNEL"
+            done
+        fi
     fi
 }
 
@@ -1089,6 +1130,23 @@ function mkinitcpio() {
     arch-chroot "${MNT_DIR}" mkinitcpio -P
 }
 
+function mkinitcpio_preset() {
+    local KERNEL="$1"
+
+    cat <<EOT > "${MNT_DIR}/etc/mkinitcpio.d/$KERNEL.preset"
+ALL_config="/etc/mkinitcpio.conf"
+ALL_kver="/boot/vmlinuz-$KERNEL"
+ALL_microcode=(/boot/*-ucode.img)
+
+PRESETS=('default' 'fallback')
+
+default_uki="$ESP_DIRECTORY/EFI/linux/archlinux-$KERNEL.efi"
+
+fallback_uki="$ESP_DIRECTORY/EFI/linux/archlinux-$KERNEL-fallback.efi"
+fallback_options="-S autodetect"
+EOT
+}
+
 function network() {
     print_step "network()"
 
@@ -1140,13 +1198,7 @@ function bootloader() {
     fi
     if [ -n "$LUKS_PASSWORD" ]; then
         case "$BOOTLOADER" in
-            "grub" )
-                if [ "$DEVICE_TRIM" == "true" ]; then
-                    BOOTLOADER_ALLOW_DISCARDS=":allow-discards"
-                fi
-                CMDLINE_LINUX="cryptdevice=UUID=$UUID_ROOT:$LUKS_DEVICE_NAME$BOOTLOADER_ALLOW_DISCARDS"
-                ;;
-            "refind" )
+            "grub" | "refind" | "efistub" )
                 if [ "$DEVICE_TRIM" == "true" ]; then
                     BOOTLOADER_ALLOW_DISCARDS=":allow-discards"
                 fi
@@ -1158,13 +1210,6 @@ function bootloader() {
                 fi
                 CMDLINE_LINUX="rd.luks.name=$UUID_ROOT=$LUKS_DEVICE_NAME$BOOTLOADER_ALLOW_DISCARDS"
                 ;;
-            "efistub")
-                if [ "$DEVICE_TRIM" == "true" ]; then
-                    BOOTLOADER_ALLOW_DISCARDS=":allow-discards"
-                fi
-                CMDLINE_LINUX="cryptdevice=UUID=$UUID_ROOT:$LUKS_DEVICE_NAME$BOOTLOADER_ALLOW_DISCARDS"
-                ;;
-
         esac
     fi
     if [ "$FILE_SYSTEM_TYPE" == "btrfs" ]; then
@@ -1198,6 +1243,14 @@ function bootloader() {
             bootloader_efistub
             ;;
     esac
+
+    if [ "$UKI" == "true" ]; then
+        if [ "$GPT_AUTOMOUNT" == "true" ]; then
+            echo "$CMDLINE_LINUX rw" > "${MNT_DIR}/etc/kernel/cmdline"
+        else
+            echo "$CMDLINE_LINUX $CMDLINE_LINUX_ROOT rw" > "${MNT_DIR}/etc/kernel/cmdline" 
+        fi
+    fi
 
     arch-chroot "${MNT_DIR}" systemctl set-default multi-user.target
 }
@@ -1239,35 +1292,27 @@ function bootloader_refind() {
     arch-chroot "${MNT_DIR}" sed -i 's/^#scan_all_linux_kernels.*/scan_all_linux_kernels false/' "$ESP_DIRECTORY/EFI/refind/refind.conf"
     #arch-chroot "${MNT_DIR}" sed -i 's/^#default_selection "+,bzImage,vmlinuz"/default_selection "+,bzImage,vmlinuz"/' "$ESP_DIRECTORY/EFI/refind/refind.conf"
 
-    bootloader_refind_entry "linux"
-    if [ -n "$KERNELS" ]; then
-        IFS=' ' read -ra KS <<< "$KERNELS"
-        for KERNEL in "${KERNELS[@]}"; do
-            if [[ "$KERNEL" =~ ^.*-headers$ ]]; then
-                continue
-            fi
-            bootloader_refind_entry "$KERNEL"
-        done
-    fi
+    if [ "$UKI" == "false" ]; then
+        bootloader_refind_entry "linux"
+        if [ -n "$KERNELS" ]; then
+            IFS=' ' read -r -a KS <<< "$KERNELS"
+            for KERNEL in "${KS[@]}"; do
+                if [[ "$KERNEL" =~ ^.*-headers$ ]]; then
+                    continue
+                fi
+                bootloader_refind_entry "$KERNEL"
+            done
+        fi
 
-    if [ "$VIRTUALBOX" == "true" ]; then
-        echo -ne "\EFI\refind\refind_x64.efi" > "${MNT_DIR}${ESP_DIRECTORY}/startup.nsh"
+        if [ "$VIRTUALBOX" == "true" ]; then
+            echo -ne "\EFI\refind\refind_x64.efi" > "${MNT_DIR}${ESP_DIRECTORY}/startup.nsh"
+        fi
     fi
 }
 
 function bootloader_systemd() {
     arch-chroot "${MNT_DIR}" systemd-machine-id-setup
     arch-chroot "${MNT_DIR}" bootctl install
-
-    arch-chroot "${MNT_DIR}" mkdir -p "$ESP_DIRECTORY/loader/"
-    arch-chroot "${MNT_DIR}" mkdir -p "$ESP_DIRECTORY/loader/entries/"
-
-    cat <<EOT > "${MNT_DIR}${ESP_DIRECTORY}/loader/loader.conf"
-# alis
-timeout 5
-default archlinux.conf
-editor 0
-EOT
 
     #arch-chroot "${MNT_DIR}" systemctl enable systemd-boot-update.service
 
@@ -1284,19 +1329,36 @@ When = PostTransaction
 Exec = /usr/bin/systemctl restart systemd-boot-update.service
 EOT
 
-    bootloader_systemd_entry "linux"
-    if [ -n "$KERNELS" ]; then
-        IFS=' ' read -ra KS <<< "$KERNELS"
-        for KERNEL in "${KERNELS[@]}"; do
-            if [[ "$KERNEL" =~ ^.*-headers$ ]]; then
-                continue
-            fi
-            bootloader_systemd_entry "$KERNEL"
-        done
-    fi
+    if [ "$UKI" == "true" ]; then
+        cat <<EOT > "${MNT_DIR}${ESP_DIRECTORY}/loader/loader.conf"
+# alis
+timeout 5
+editor 0
+EOT
+    else
+        cat <<EOT > "${MNT_DIR}${ESP_DIRECTORY}/loader/loader.conf"
+# alis
+timeout 5
+default archlinux.conf
+editor 0
+EOT
 
-    if [ "$VIRTUALBOX" == "true" ]; then
-        echo -n "\EFI\systemd\systemd-bootx64.efi" > "${MNT_DIR}${ESP_DIRECTORY}/startup.nsh"
+        arch-chroot "${MNT_DIR}" mkdir -p "$ESP_DIRECTORY/loader/entries/"
+
+        bootloader_systemd_entry "linux"
+        if [ -n "$KERNELS" ]; then
+            IFS=' ' read -r -a KS <<< "$KERNELS"
+            for KERNEL in "${KS[@]}"; do
+                if [[ "$KERNEL" =~ ^.*-headers$ ]]; then
+                    continue
+                fi
+                bootloader_systemd_entry "$KERNEL"
+            done
+        fi
+
+        if [ "$VIRTUALBOX" == "true" ]; then
+            echo -n "\EFI\systemd\systemd-bootx64.efi" > "${MNT_DIR}${ESP_DIRECTORY}/startup.nsh"
+        fi
     fi
 }
 
@@ -1305,8 +1367,8 @@ function bootloader_efistub() {
 
     bootloader_efistub_entry "linux"
     if [ -n "$KERNELS" ]; then
-        IFS=' ' read -ra KS <<< "$KERNELS"
-        for KERNEL in "${KERNELS[@]}"; do
+        IFS=' ' read -r -a KS <<< "$KERNELS"
+        for KERNEL in "${KS[@]}"; do
             if [[ "$KERNEL" =~ ^.*-headers$ ]]; then
                 continue
             fi
@@ -1354,7 +1416,7 @@ title Arch Linux ($KERNEL)
 efi /vmlinuz-linux
 $MICROCODE
 initrd /initramfs-$KERNEL.img
-options initrd=initramfs-$KERNEL.img $CMDLINE_LINUX_ROOT rw $CMDLINE_LINUX"
+options initrd=initramfs-$KERNEL.img $CMDLINE_LINUX_ROOT rw $CMDLINE_LINUX
 EOT
 
     cat <<EOT >> "${MNT_DIR}${ESP_DIRECTORY}/loader/entries/arch-$KERNEL-terminal.conf"
@@ -1362,7 +1424,7 @@ title Arch Linux ($KERNEL, terminal)
 efi /vmlinuz-linux
 $MICROCODE
 initrd /initramfs-$KERNEL-terminal.img
-options initrd=initramfs-$KERNEL-terminal.img $CMDLINE_LINUX_ROOT rw $CMDLINE_LINUX"
+options initrd=initramfs-$KERNEL-terminal.img $CMDLINE_LINUX_ROOT rw $CMDLINE_LINUX
 EOT
 
     cat <<EOT >> "${MNT_DIR}${ESP_DIRECTORY}/loader/entries/arch-$KERNEL-fallback.conf"
@@ -1370,15 +1432,25 @@ title Arch Linux ($KERNEL, fallback)
 efi /vmlinuz-linux
 $MICROCODE
 initrd /initramfs-$KERNEL-fallback.img
-options initrd=initramfs-$KERNEL-fallback.img $CMDLINE_LINUX_ROOT rw $CMDLINE_LINUX"
+options initrd=initramfs-$KERNEL-fallback.img $CMDLINE_LINUX_ROOT rw $CMDLINE_LINUX
 EOT
 }
 
 function bootloader_efistub_entry() {
     local KERNEL="$1"
+    local MICROCODE=""
 
-    arch-chroot "${MNT_DIR}" efibootmgr --disk "$DEVICE" --part 1 --create --label "Arch Linux ($KERNEL)" --loader /vmlinuz-"$KERNEL" --unicode "$CMDLINE_LINUX $CMDLINE_LINUX_ROOT rw $EFISTUB_MICROCODE initrd=\initramfs-$POSTFIX.img" --verbose
-    arch-chroot "${MNT_DIR}" efibootmgr --disk "$DEVICE" --part 1 --create --label "Arch Linux ($KERNEL fallback)" --loader /vmlinuz-"$KERNEL" --unicode "$CMDLINE_LINUX $CMDLINE_LINUX_ROOT rw $EFISTUB_MICROCODE initrd=\initramfs-$POSTFIX-fallback.img" --verbose
+    if [ "$UKI" == "true" ]; then
+        arch-chroot "${MNT_DIR}" efibootmgr --disk "$DEVICE" --part 1 --create --label "Arch Linux ($KERNEL fallback)" --loader "EFI\linux\archlinux-$KERNEL-fallback.efi" --unicode --verbose
+        arch-chroot "${MNT_DIR}" efibootmgr --disk "$DEVICE" --part 1 --create --label "Arch Linux ($KERNEL)" --loader "EFI\linux\archlinux-$KERNEL.efi" --unicode --verbose
+    else
+        if [ -n "$INITRD_MICROCODE" ]; then
+            local MICROCODE="initrd=\\$INITRD_MICROCODE"
+        fi
+
+        arch-chroot "${MNT_DIR}" efibootmgr --disk "$DEVICE" --part 1 --create --label "Arch Linux ($KERNEL)" --loader /vmlinuz-"$KERNEL" --unicode "$CMDLINE_LINUX $CMDLINE_LINUX_ROOT rw $MICROCODE initrd=\initramfs-$KERNEL.img" --verbose
+        arch-chroot "${MNT_DIR}" efibootmgr --disk "$DEVICE" --part 1 --create --label "Arch Linux ($KERNEL fallback)" --loader /vmlinuz-"$KERNEL" --unicode "$CMDLINE_LINUX $CMDLINE_LINUX_ROOT rw $MICROCODE initrd=\initramfs-$KERNEL-fallback.img" --verbose
+    fi
 }
 
 function custom_shell() {
@@ -1550,52 +1622,16 @@ function display_manager() {
 
     if [ "$DISPLAY_MANAGER" == "auto" ]; then
         case "$DESKTOP_ENVIRONMENT" in
-            "gnome" )
+            "gnome" | "budgie" )
                 display_manager_gdm
                 ;;
             "kde" )
                 display_manager_sddm
                 ;;
-            "xfce" )
-                display_manager_lightdm
-                ;;
-            "mate" )
-                display_manager_lightdm
-                ;;
-            "cinnamon" )
-                display_manager_lightdm
-                ;;
             "lxde" )
                 display_manager_lxdm
                 ;;
-            "i3-wm" )
-                display_manager_lightdm
-                ;;
-            "i3-gaps" )
-                display_manager_lightdm
-                ;;
-            "deepin" )
-                display_manager_lightdm
-                ;;
-            "budgie" )
-                display_manager_gdm
-                ;;
-            "bspwm" )
-                display_manager_lightdm
-                ;;
-            "awesome" )
-                display_manager_lightdm
-                ;;
-            "qtile" )
-                display_manager_lightdm
-                ;;
-            "openbox" )
-                display_manager_lightdm
-                ;;
-            "leftwm" )
-                display_manager_lightdm
-                ;;
-            "dusk" )
+            "xfce" | "mate" | "cinnamon" | "i3-wm" | "i3-gaps" | "deepin" | "bspwm" | "awesome" | "qtile" | "openbox" | "leftwm" | "dusk" )
                 display_manager_lightdm
                 ;;
         esac
@@ -1812,13 +1848,11 @@ function main() {
     execute_step "partition"
     execute_step "install"
     execute_step "configuration"
-    execute_step "mkinitcpio_configuration"
     execute_step "users"
     if [ -n "$DISPLAY_DRIVER" ]; then
         execute_step "display_driver"
     fi
     execute_step "kernels"
-    execute_step "mkinitcpio"
     execute_step "network"
     if [ "$VIRTUALBOX" == "true" ]; then
         execute_step "virtualbox"
@@ -1827,6 +1861,8 @@ function main() {
         execute_step "vmware"
     fi
     execute_step "bootloader"
+    execute_step "mkinitcpio_configuration"
+    execute_step "mkinitcpio"
     if [ -n "$CUSTOM_SHELL" ]; then
         execute_step "custom_shell"
     fi
