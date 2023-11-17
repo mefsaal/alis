@@ -72,15 +72,16 @@ For new features, improvements and bugs, fill an issue in GitHub or make a pull 
 * **Periodic TRIM** for SSD storage
 * Intel and AMD **processors microcode**
 * Optional **swap file**
-* **VirtualBox guest additions** and **VMware tools** support
+* **PipeWire** support
+* **Secure Boot** support
 * **Kernel compression** and **custom parameters**
 * **Users creation** and **add to sudoers**
 * **systemd units enable or disable**
 * **systemd-homed** support
 * **systemd GPT partition automounting** support
-* **PipeWire** support
 * **Multilib** support
 * **Files provision** support
+* **VirtualBox guest additions** and **VMware tools** support
 * **SSH install** and **cloud-init** support
 * Arch Linux custom **packages installation** and **repositories installation**
 * Flatpak utility installation and **Flatpak packages installation**
@@ -230,6 +231,7 @@ Also, if you prefer to install an Arch Linux using a guided graphical installer 
 * [ArcoLinux](https://arcolinux.com/)
 * [Manjaro](https://manjaro.org/)
 * [EndeavourOS](https://endeavouros.com/)
+* [GarudaLinux](https://garudalinux.org/)
 * [Archlabs](https://archlabslinux.com/)
 * [RebornOS](https://rebornos.org/)
 * [BlackArch](https://blackarch.org/)
@@ -323,6 +325,7 @@ https://www.archlinux.org/download/
 * https://wiki.archlinux.org/title/Qtile
 * https://wiki.archlinux.org/title/REFInd
 * https://wiki.archlinux.org/title/Reflector
+* https://wiki.archlinux.org/title/Unified_Extensible_Firmware_Interface/Secure_Boot
 * https://wiki.archlinux.org/title/Solid_state_drive/NVMe
 * https://wiki.archlinux.org/title/Solid_State_Drives
 * https://wiki.archlinux.org/title/Swap
